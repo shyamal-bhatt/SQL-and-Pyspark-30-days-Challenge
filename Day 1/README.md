@@ -6,9 +6,9 @@ The task is to calculate the **Annual Recurring Revenue (ARR)** for a SaaS compa
 ### Key Details:
 1. **ARR Formula**:
    The ARR is calculated using the simplified formula:
-   \[
-   \text{ARR} = \left( \frac{\text{Recurring Amount of Invoice}}{\text{Days of Validity of Invoice}} \right) \times 365
-   \]
+   
+   $\text{ARR} = \left( \frac{\text{Recurring Amount of Invoice}}{\text{Days of Validity of Invoice}} \right) \times 365
+   \$
    
 2. **Guidelines**:
    - Include **only recurring items** in the ARR calculation (ignore one-shot products).
@@ -94,3 +94,44 @@ FROM
     RecurringItems
 WHERE 
     billing_type = 'invoice';
+```
+
+### Query 2: ARR on the last day of each month between june and dec 2019
+```sql
+WITH RecurringItems AS (
+    SELECT 
+        i.id AS item_id,
+        i.billing_id,
+        i.amount,
+        DATEDIFF(i.valid_to, i.valid_from) AS days_validity,
+        e.exchange_rate,
+        b.billing_type,
+        b.invoice_date,
+        b.currency,
+        LAST_DAY(DATE_ADD('2019-06-01', INTERVAL n.num MONTH)) AS arr_date
+    FROM 
+        Item i
+    JOIN 
+        Billing b ON i.billing_id = b.id
+    JOIN 
+        Exchange e ON b.currency = e.from_currency AND b.invoice_date = e.date
+    CROSS JOIN (
+        SELECT 0 AS num UNION SELECT 1 UNION SELECT 2 UNION SELECT 3 
+        UNION SELECT 4 UNION SELECT 5 UNION SELECT 6
+    ) n
+    WHERE 
+        i.type = 'recurring' 
+        AND LAST_DAY(DATE_ADD('2019-06-01', INTERVAL n.num MONTH)) BETWEEN i.valid_from AND i.valid_to
+)
+SELECT 
+    arr_date,
+    ROUND(SUM((amount / days_validity) * 365 * exchange_rate), 2) AS ARR_USD
+FROM 
+    RecurringItems
+WHERE 
+    billing_type = 'invoice'
+GROUP BY 
+    arr_date
+ORDER BY 
+    arr_date;
+```
